@@ -1,6 +1,4 @@
 
-var v = new convnetjs.Vol(32, 32, 3);
-
 var canvasUtil = window.canvasUtil = (function() {
     return {
         // Ratio of screen size divided by canvas size.
@@ -65,7 +63,7 @@ var canvasUtil = window.canvasUtil = (function() {
                 circle.radius * window.gsc
             );
         },
-
+       
         // Constructor for point type
         point: function(x, y) {
             var p = {
@@ -86,6 +84,21 @@ var canvasUtil = window.canvasUtil = (function() {
             };
 
             return r;
+        },
+
+        // Constructor function for the nXn grid of rectangles
+        grid: function(n) {
+            i = window.ww / n;
+            j = window.ww / n;
+            var g = [];
+            x = 0;
+            y = 0;
+            for (k = 0; k < n; k++) {
+                for (l = 0, l < n, l++) {
+                    g.push(rect(x + l*i,y + k*j,i,j))
+                }
+            }
+            return g;
         },
 
         // Constructor for circle type
@@ -170,6 +183,15 @@ var canvasUtil = window.canvasUtil = (function() {
                 context.fill();
             }
             context.restore();
+        },
+        // Draw the grid
+        drawGrid: function(grid) {
+            n = length(grid);
+            for (i = 0, i < n; i++) {
+                if (grid[i]){
+                    drawRect(grid[i]);
+                }
+            }
         },
 
         // Draw a circle on the canvas.
@@ -302,3 +324,7 @@ window.setInterval(function() {
 	canvasUtil.setMouseCoordinates({x:55.5, y:100});
 	console.log(window.xm);
 }, 2000);
+
+
+
+window.setInterval(function() {console.log(window.snake.ang);}, 100);
