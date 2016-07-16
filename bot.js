@@ -13,7 +13,6 @@ var canvasUtil = window.canvasUtil = (function() {
         setMouseCoordinates: function(point) {
             window.xm = point.x;
             window.ym = point.y;
-            console.log(v);
         },
 
         // Convert snake-relative coordinates to absolute screen coordinates.
