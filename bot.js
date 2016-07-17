@@ -1,6 +1,84 @@
 
-var v = new convnetjs.Vol(32, 32, 3);
 
+var buildModel = function() {
+    if(!convnetjs) {
+        // If we haven't loaded our library yet, wait a bit!
+        window.setTimeout(buildModel, 100);
+    }
+    var layers = [];
+    layers.push({type:'input', out_sx: 100, out_sy: 100, out_depth:3});
+    
+}
+
+var pool_image=  function(pooler, data, w, h, ox, oy) {
+    var pool = []
+    var xi = w / ox; 
+    var yi = h / oy; 
+
+    var xt = 0;
+    var yt = 0; 
+    var idx = 0;
+    for (var i = 0; i < ox; i++) {
+        var pr = [];
+        for (var j = 0; j < oy; j++) {
+            var red_t = -1;
+            var blue_t = -1;
+            var green_t = -1;
+            for (var k = Math.floor(xt); k < Math.floor(xt + xi); k++) {
+                for (var l =  Math.floor(yt); l < Math.floor(yt + yi); l++) {
+                        idx = (0 + k + l*w) * 4;
+                        red_t = pooler(red_t, data[idx]);
+                        idx = idx + 1;
+                        green_t  = pooler(green_t, data[idx]);
+                        idx = idx + 1;
+                        blue_t  = pooler(blue_t, data[idx])
+                }
+            }
+            pr.push([red_t, green_t, blue_t ]);
+            yt += yi;
+        }
+        pool.push(pr);
+        yt = 0; 
+        xt += xi;
+    }
+    return pool;
+}
+
+var mainGameLoop = function() {
+
+    // gather game data
+    var image = window.mc.getContext('2d').getImageData(0,0,window.ww, window.hh).data;
+    var sum;
+    var time = new Number(new Date());
+    var x = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+          1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+          1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+          1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 ]
+    var pools = pool_image(Math.max, x,  4, 4, 2, 2);
+    console.log(pools);
+    console.log(new Number(new Date()) - time);
+    
+    
+}
+
+mainGameLoop();
+
+var penalty = 0; 
+
+var original_connect = window.connect;
+
+window.connect = function() {
+    original_connect();
+    penalty +=50;
+}
+
+var respawn = function() {
+    if(!window.playing) {
+        window.connect();
+    }
+}
+
+window.setInterval(respawn, 500);
 var canvasUtil = window.canvasUtil = (function() {
     return {
         // Ratio of screen size divided by canvas size.
@@ -13,7 +91,6 @@ var canvasUtil = window.canvasUtil = (function() {
         setMouseCoordinates: function(point) {
             window.xm = point.x;
             window.ym = point.y;
-            console.log(v);
         },
 
         // Convert snake-relative coordinates to absolute screen coordinates.
@@ -56,16 +133,6 @@ var canvasUtil = window.canvasUtil = (function() {
             return c;
         },
 
-        // Map to Canvas coordinates conversion for drawing circles.
-        circleMapToCanvas: function(circle) {
-            var newCircle = canvasUtil.mapToCanvas(circle);
-            return canvasUtil.circle(
-                newCircle.x,
-                newCircle.y,
-                // Radius also needs to scale by .gsc
-                circle.radius * window.gsc
-            );
-        },
 
         // Constructor for point type
         point: function(x, y) {
@@ -100,27 +167,6 @@ var canvasUtil = window.canvasUtil = (function() {
             return c;
         },
 
-        // Fast atan2
-        fastAtan2: function(y, x) {
-            const QPI = Math.PI / 4;
-            const TQPI = 3 * Math.PI / 4;
-            var r = 0.0;
-            var angle = 0.0;
-            var abs_y = Math.abs(y) + 1e-10;
-            if (x < 0) {
-                r = (x + abs_y) / (abs_y - x);
-                angle = TQPI;
-            } else {
-                r = (x - abs_y) / (x + abs_y);
-                angle = QPI;
-            }
-            angle += (0.1963 * r * r - 0.9817) * r;
-            if (y < 0) {
-                return -angle;
-            }
-
-            return angle;
-        },
 
         // Adjusts zoom in response to the mouse wheel.
         setZoom: function(e) {
@@ -144,162 +190,6 @@ var canvasUtil = window.canvasUtil = (function() {
             }
         },
 
-        // Sets background to the given image URL.
-        // Defaults to slither.io's own background.
-        setBackground: function(url) {
-            url = typeof url !== 'undefined' ? url : '/s/bg45.jpg';
-            window.ii.src = url;
-        },
-
-        // Draw a rectangle on the canvas.
-        drawRect: function(rect, color, fill, alpha) {
-            if (alpha === undefined) alpha = 1;
-
-            var context = window.mc.getContext('2d');
-            var lc = canvasUtil.mapToCanvas({
-                x: rect.x,
-                y: rect.y
-            });
-
-            context.save();
-            context.globalAlpha = alpha;
-            context.strokeStyle = color;
-            context.rect(lc.x, lc.y, rect.width * window.gsc, rect.height * window.gsc);
-            context.stroke();
-            if (fill) {
-                context.fillStyle = color;
-                context.fill();
-            }
-            context.restore();
-        },
-
-        // Draw a circle on the canvas.
-        drawCircle: function(circle, color, fill, alpha) {
-            if (alpha === undefined) alpha = 1;
-            if (circle.radius === undefined) circle.radius = 5;
-
-            var context = window.mc.getContext('2d');
-            var drawCircle = canvasUtil.circleMapToCanvas(circle);
-
-            context.save();
-            context.globalAlpha = alpha;
-            context.beginPath();
-            context.strokeStyle = color;
-            context.arc(drawCircle.x, drawCircle.y, drawCircle.radius, 0, Math.PI * 2);
-            context.stroke();
-            if (fill) {
-                context.fillStyle = color;
-                context.fill();
-            }
-            context.restore();
-        },
-
-        // Draw an angle.
-        // @param {number} start -- where to start the angle
-        // @param {number} angle -- width of the angle
-        // @param {String|CanvasGradient|CanvasPattern} color
-        // @param {boolean} fill
-        // @param {number} alpha
-        drawAngle: function(start, angle, color, fill, alpha) {
-            if (alpha === undefined) alpha = 0.6;
-
-            var context = window.mc.getContext('2d');
-
-            context.save();
-            context.globalAlpha = alpha;
-            context.beginPath();
-            context.moveTo(window.mc.width / 2, window.mc.height / 2);
-            context.arc(window.mc.width / 2, window.mc.height / 2, window.gsc * 100, start, angle);
-            context.lineTo(window.mc.width / 2, window.mc.height / 2);
-            context.closePath();
-            context.stroke();
-            if (fill) {
-                context.fillStyle = color;
-                context.fill();
-            }
-            context.restore();
-        },
-
-        // Draw a line on the canvas.
-        drawLine: function(p1, p2, color, width) {
-            if (width === undefined) width = 5;
-
-            var context = window.mc.getContext('2d');
-            var dp1 = canvasUtil.mapToCanvas(p1);
-            var dp2 = canvasUtil.mapToCanvas(p2);
-
-            context.save();
-            context.beginPath();
-            context.lineWidth = width * window.gsc;
-            context.strokeStyle = color;
-            context.moveTo(dp1.x, dp1.y);
-            context.lineTo(dp2.x, dp2.y);
-            context.stroke();
-            context.restore();
-        },
-
-        // Given the start and end of a line, is point left.
-        isLeft: function(start, end, point) {
-            return ((end.x - start.x) * (point.y - start.y) -
-                (end.y - start.y) * (point.x - start.x)) > 0;
-
-        },
-
-        // Get distance squared
-        getDistance2: function(x1, y1, x2, y2) {
-            var distance2 = Math.pow(x1 - x2, 2) + Math.pow(y1 - y2, 2);
-            return distance2;
-        },
-
-        getDistance2FromSnake: function(point) {
-            point.distance = canvasUtil.getDistance2(window.snake.xx, window.snake.yy,
-                point.xx, point.yy);
-            return point;
-        },
-
-        // Check if point in Rect
-        pointInRect: function(point, rect) {
-            if (rect.x <= point.x && rect.y <= point.y &&
-                rect.x + rect.width >= point.x && rect.y + rect.height >= point.y) {
-                return true;
-            }
-            return false;
-        },
-
-        // Check if circles intersect
-        circleIntersect: function(circle1, circle2) {
-            var bothRadii = circle1.radius + circle2.radius;
-            var dx = circle1.x - circle2.x;
-            var dy = circle1.y - circle2.y;
-
-            // Pretends the circles are squares for a quick collision check.
-            // If it collides, do the more expensive circle check.
-            if (dx + bothRadii > 0 && dy + bothRadii > 0 &&
-                dx - bothRadii < 0 && dy - bothRadii < 0) {
-
-                var distance2 = canvasUtil.getDistance2(circle1.x, circle1.y, circle2.x, circle2.y);
-
-                if (distance2 < bothRadii * bothRadii) {
-                    if (window.visualDebugging) {
-                        var collisionPointCircle = canvasUtil.circle(
-                            ((circle1.x * circle2.radius) + (circle2.x * circle1.radius)) /
-                            bothRadii,
-                            ((circle1.y * circle2.radius) + (circle2.y * circle1.radius)) /
-                            bothRadii,
-                            5
-                        );
-                        canvasUtil.drawCircle(circle2, 'red', true);
-                        canvasUtil.drawCircle(collisionPointCircle, 'cyan', true);
-                    }
-                    return true;
-                }
-            }
-            return false;
-        }
     }
 })();
 
-window.setInterval(function() {
-	canvasUtil.setMouseCoordinates({x:55.5, y:100});
-	console.log(window.xm);
-}, 2000);

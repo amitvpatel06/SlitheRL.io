@@ -7,12 +7,11 @@ a.src = chrome.extension.getURL('convnet.js');
 
 (document.head||document.documentElement).appendChild(s);
 a.onload = function() {
+    a.parentNode.removeChild(a);
+};
+
+s.onload = function() {
     s.parentNode.removeChild(s);
 };
 
 
-
-
-a.onload = function() {
-    a.parentNode.removeChild(a);
-};
