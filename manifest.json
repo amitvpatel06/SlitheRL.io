@@ -6,5 +6,5 @@
          "js": ["inject.js"],
          "matches": ["http://slither.io/"]
       }],
-     "web_accessible_resources": ["bot.js", "convnet.js"]
+     "web_accessible_resources": ["bot.js", "convnet.js", "rl.js"]
 }

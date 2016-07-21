@@ -1,24 +1,42 @@
 
 
+var net;
+var trainer; 
+var brain; 
+var average = 0; 
+var num = 1; 
 
-var buildModel = function() {
+var buildModelGraph = function() {
     if(!convnetjs) {
         // If we haven't loaded our library yet, wait a bit!
-        window.setTimeout(buildModel, 100);
+        window.setTimeout(buildModelGraph, 100);
     }
     var layers = [];
-    layers.push({type:'input', out_sx: 100, out_sy: 100, out_depth:3});
-    
+    layers.push({type:'input', out_sx: 20, out_sy: 20, out_depth:3});
+    layers.push({type:'conv', sx:5, filters:10, stride:1, activation:'relu'});
+    layers.push({type:'regression', num_neurons: 1200})
+    net = new convnetjs.Net();
+    net.makeLayers(layers);
+    trainer = new convnetjs.SGDTrainer(net, {method:'adadelta', batch_size:1, l2_decay:0.0001});
+
+    var env = {};
+    env.getNumStates = function() { return 2560; }
+    env.getMaxNumActions = function() { return 4; }
+    var spec = { alpha: 0.01 }
+    brain = new RL.DQNAgent(env, spec);
+
 }
 
 var pool_image=  function(pooler, data, w, h, ox, oy) {
     var pool = []
+    var img = [];
     var xi = w / ox; 
     var yi = h / oy; 
 
     var xt = 0;
     var yt = 0; 
     var idx = 0;
+    var c = 0;
     for (var i = 0; i < ox; i++) {
         var pr = [];
         for (var j = 0; j < oy; j++) {
@@ -33,20 +51,22 @@ var pool_image=  function(pooler, data, w, h, ox, oy) {
                         idx = idx + 1;
                         green_t  = pooler(green_t, data[idx]);
                         idx = idx + 1;
-                        blue_t  = pooler(blue_t, data[idx])
+                        blue_t  = pooler(blue_t, data[idx]);
                         idx = idx + 1;
-                        alpha_t = pooler(alpha_t, data[idx])
+                        alpha_t = pooler(alpha_t, data[idx]);
                 }
             }
-            pr.push([red_t, green_t, blue_t ]);
-            yt += yi;
+            img.push(red_t);
+            img.push(green_t);
+            img.push(blue_t);
+            pr.push([red_t, green_t, blue_t]);
         }
-        pool.push(pr);
+        pool.push(pr)
         yt = 0; 
         xt += xi;
     }
-    return pool;
-}
+    return [pool, img];
+};
 
 var mainGameLoop = function() {
 
@@ -54,18 +74,65 @@ var mainGameLoop = function() {
     var image = window.mc.getContext('2d').getImageData(0,0,window.ww, window.hh).data;
     var sum;
     var time = new Number(new Date());
-    var x = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-          1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-          1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-          1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 ]
     var pools = pool_image(Math.max, image,  window.ww, window.hh, 100, 100);
-    console.log(pools);
+    if(net) {   
+        var inp = new convnetjs.Vol(100,100,3);
+        for(var i = 0; i < 100; i++) {
+            for(var j = 0; j < 100; j++) {
+                for(var k = 0; k < 3; k++){
+                    inp.set(i,j,k, pools[0][i][j][k]);
+                }
+            }
+        }
+
+    }
     console.log(new Number(new Date()) - time);
-    
+    net.forward(inp);
+    var rlInp = net.layers[2].out_act.w;
+    var action = brain.act(rlInp);
+    setDirection(action);
+    var score = window.score;
+    setTimeout(function () {
+        learnReward(score);
+    }, 1000)
+};
+
+var learnReward = function(past_score) {
+    var diff = window.score - past_score;
+    if(diff > 0) {    
+        console.log("diff ");
+        console.log(diff);
+    }
+    brain.learn(diff);
+    num += 1;
+    if(!isNaN(diff)) {
+        average = average + diff/num;
+        console.log("score ");
+        console.log(average);
+    }
+};
+
+var setDirection = function (direction) {
+    if(direction == 0) {
+        window.xm = 0;
+        window.ym = 100;
+    }
+    else if (direction == 1) {
+        window.xm = -100;
+        window.ym = 0;
+    }
+    else if (direction == 2) {
+        window.xm = 0;
+        window.ym = -100;
+    }
+    else {
+        window.xm = 100;
+        window.ym = 0;
+    }
 }
-
-window.setInterval(mainGameLoop, 200);
-
+window.setInterval(mainGameLoop, 2000);
+window.setTimeout(buildModelGraph, 500);
+    
 var penalty = 0; 
 
 var original_connect = window.connect;
@@ -77,11 +144,16 @@ window.connect = function() {
 
 var respawn = function() {
     if(!window.playing) {
+        if(brain) {
+            brain.learn(-10);
+            average -= 10 / num
+        }
         window.connect();
     }
 }
 
 window.setInterval(respawn, 500);
+
 
 var canvasUtil = window.canvasUtil = (function() {
     return {
